@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HALFLINE — CBB Game Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0c10; --surface:#111318; --surface2:#181b22; --border:#1e2230;
+    --accent:#00e5a0; --accent2:#ff5c3a; --accent3:#4d9fff; --warn:#f5c518;
+    --text:#e8eaf0; --text2:#7a8099; --text3:#4a4f66;
+    --play:#00e5a0; --pass:#ff5c3a; --monitor:#f5c518;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; overflow-x:hidden; }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image: linear-gradient(rgba(0,229,160,0.025) 1px,transparent 1px), linear-gradient(90deg,rgba(0,229,160,0.025) 1px,transparent 1px);
+    background-size:40px 40px; pointer-events:none; z-index:0;
+  }
+  .container { max-width:1140px; margin:0 auto; padding:0 24px; position:relative; z-index:1; }
+
+  header { padding:22px 0 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .logo { font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:4px; color:var(--accent); text-shadow:0 0 30px rgba(0,229,160,0.35); }
+  .logo span { color:var(--text2); font-size:13px; font-family:'DM Mono',monospace; letter-spacing:2px; display:block; margin-top:-3px; }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  .live-badge { display:flex; align-items:center; gap:6px; font-family:'DM Mono',monospace; font-size:11px; color:var(--accent); letter-spacing:1px; }
+  .live-dot { width:7px; height:7px; background:var(--accent); border-radius:50%; animation:pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.75)} }
+  .season-tag { font-family:'DM Mono',monospace; font-size:11px; color:var(--text3); letter-spacing:1px; padding:4px 10px; border:1px solid var(--border); border-radius:4px; }
+
+  /* SERVER URL CONFIG BAR */
+  .config-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 0; }
+  .config-inner { display:flex; align-items:center; gap:10px; }
+  .config-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; color:var(--text3); white-space:nowrap; }
+  .config-input { background:var(--surface2); border:1px solid var(--border); border-radius:5px; padding:6px 10px; color:var(--text2); font-family:'DM Mono',monospace; font-size:12px; flex:1; outline:none; transition:border-color 0.2s; }
+  .config-input:focus { border-color:var(--accent); color:var(--text); }
+  .config-status { font-family:'DM Mono',monospace; font-size:11px; padding:5px 10px; border-radius:4px; white-space:nowrap; }
+  .config-status.ok { background:rgba(0,229,160,0.1); color:var(--accent); border:1px solid rgba(0,229,160,0.2); }
+  .config-status.err { background:rgba(255,92,58,0.1); color:var(--pass); border:1px solid rgba(255,92,58,0.2); }
+  .config-status.idle { background:var(--surface2); color:var(--text3); border:1px solid var(--border); }
+  .ping-btn { background:none; border:1px solid var(--border); border-radius:5px; padding:5px 12px; color:var(--text3); font-family:'DM Mono',monospace; font-size:11px; cursor:pointer; transition:all 0.2s; }
+  .ping-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+  .game-input-section { padding:28px 0 24px; border-bottom:1px solid var(--border); }
+  .section-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:3px; color:var(--text3); text-transform:uppercase; margin-bottom:18px; }
+  .teams-row { display:grid; grid-template-columns:1fr auto 1fr; gap:16px; align-items:center; margin-bottom:16px; }
+  .team-input-group { display:flex; flex-direction:column; gap:7px; }
+  .team-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; color:var(--text3); }
+  .team-input { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; color:var(--text); font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:2px; width:100%; outline:none; transition:border-color 0.2s; }
+  .team-input:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,229,160,0.08); }
+  .team-input::placeholder { color:var(--text3); }
+  .vs-badge { font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:3px; color:var(--text3); text-align:center; padding-top:20px; }
+  .meta-row { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
+  .meta-input-group { display:flex; flex-direction:column; gap:5px; }
+  .meta-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; color:var(--text3); }
+  .meta-input,.meta-select { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:9px 11px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:13px; width:100%; outline:none; transition:border-color 0.2s; -webkit-appearance:none; }
+  .meta-input:focus,.meta-select:focus { border-color:var(--accent); }
+  .meta-select option { background:var(--surface2); }
+
+  .data-sources-section { padding:22px 0; border-bottom:1px solid var(--border); }
+  .sources-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-top:14px; }
+  .source-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; position:relative; overflow:hidden; transition:all 0.2s; }
+  .source-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; background:var(--accent); transform:scaleX(0); transition:transform 0.2s; }
+  .source-card.active::after { transform:scaleX(1); }
+  .source-card.loading::after { transform:scaleX(1); animation:loadBar 1.4s ease infinite; background:linear-gradient(90deg,var(--accent),var(--accent3)); }
+  @keyframes loadBar { 0%{transform:scaleX(0);transform-origin:left} 50%{transform:scaleX(1);transform-origin:left} 51%{transform:scaleX(1);transform-origin:right} 100%{transform:scaleX(0);transform-origin:right} }
+  .source-name { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:1px; color:var(--text2); margin-bottom:3px; }
+  .source-status { font-size:11px; color:var(--text3); }
+  .source-status.ok { color:var(--accent); }
+  .source-status.fetching { color:var(--accent3); }
+  .source-status.partial { color:var(--warn); }
+  .source-status.error { color:var(--pass); }
+
+  .analyze-row { padding:20px 0; display:flex; align-items:center; gap:14px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .analyze-btn { background:var(--accent); color:#000; border:none; border-radius:8px; padding:13px 32px; font-family:'Bebas Neue',sans-serif; font-size:19px; letter-spacing:3px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+  .analyze-btn:hover { filter:brightness(1.1); }
+  .analyze-btn:active { transform:scale(0.98); }
+  .analyze-btn.running { background:var(--surface2); color:var(--accent); border:1px solid var(--accent); pointer-events:none; }
+  .manual-flags { display:flex; gap:8px; flex-wrap:wrap; }
+  .flag-toggle { display:flex; align-items:center; gap:5px; padding:7px 12px; border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:12px; color:var(--text2); transition:all 0.2s; user-select:none; }
+  .flag-toggle.active { border-color:var(--accent2); color:var(--accent2); background:rgba(255,92,58,0.08); }
+  .flag-toggle input { display:none; }
+
+  .results-section { padding:28px 0; }
+  .mode-tabs { display:flex; gap:0; margin-bottom:24px; border:1px solid var(--border); border-radius:8px; overflow:hidden; width:fit-content; }
+  .mode-tab { padding:10px 28px; font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:2px; color:var(--text3); cursor:pointer; background:var(--surface); transition:all 0.2s; border:none; outline:none; }
+  .mode-tab.active { background:var(--accent); color:#000; }
+
+  .dual-verdict { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px; }
+  .verdict-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:22px; position:relative; overflow:hidden; transition:border-color 0.3s; }
+  .verdict-card.play { border-color:var(--play); background:linear-gradient(135deg,rgba(0,229,160,0.07) 0%,var(--surface) 55%); }
+  .verdict-card.pass { border-color:var(--pass); background:linear-gradient(135deg,rgba(255,92,58,0.07) 0%,var(--surface) 55%); }
+  .verdict-card.monitor { border-color:var(--monitor); background:linear-gradient(135deg,rgba(245,197,24,0.07) 0%,var(--surface) 55%); }
+  .verdict-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+  .verdict-type-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:3px; color:var(--text3); margin-bottom:4px; }
+  .verdict-badge { font-family:'Bebas Neue',sans-serif; font-size:42px; letter-spacing:3px; line-height:1; }
+  .verdict-badge.play { color:var(--play); text-shadow:0 0 30px rgba(0,229,160,0.4); }
+  .verdict-badge.pass { color:var(--pass); text-shadow:0 0 30px rgba(255,92,58,0.4); }
+  .verdict-badge.monitor { color:var(--monitor); text-shadow:0 0 30px rgba(245,197,24,0.4); }
+  .verdict-proj { text-align:right; }
+  .verdict-proj-label { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; color:var(--text3); margin-bottom:2px; }
+  .verdict-proj-val { font-family:'Bebas Neue',sans-serif; font-size:28px; color:var(--text); }
+  .confidence-bar-wrap { margin-bottom:12px; }
+  .confidence-label { display:flex; justify-content:space-between; font-family:'DM Mono',monospace; font-size:11px; color:var(--text3); margin-bottom:5px; }
+  .confidence-bar { height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .confidence-fill { height:100%; border-radius:2px; transition:width 1s cubic-bezier(0.4,0,0.2,1); }
+  .confidence-fill.play { background:var(--play); box-shadow:0 0 6px var(--play); }
+  .confidence-fill.pass { background:var(--pass); box-shadow:0 0 6px var(--pass); }
+  .confidence-fill.monitor { background:var(--monitor); box-shadow:0 0 6px var(--monitor); }
+  .verdict-reasoning { font-size:13px; color:var(--text2); line-height:1.65; border-top:1px solid var(--border); padding-top:12px; }
+
+  .alert-banner { border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; font-size:13px; }
+  .alert-banner.conflict { background:rgba(255,92,58,0.1); border:1px solid rgba(255,92,58,0.3); color:var(--accent2); }
+  .alert-banner.parlay { background:rgba(0,229,160,0.08); border:1px solid rgba(0,229,160,0.3); color:var(--accent); }
+  .alert-banner.neutral { background:rgba(245,197,24,0.08); border:1px solid rgba(245,197,24,0.25); color:var(--warn); }
+  .alert-banner.error { background:rgba(255,92,58,0.08); border:1px solid rgba(255,92,58,0.2); color:var(--pass); }
+  .alert-icon { font-size:20px; flex-shrink:0; }
+  .alert-text strong { display:block; font-weight:600; margin-bottom:2px; }
+  .alert-text span { font-size:12px; opacity:0.8; }
+
+  .signals-row { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
+  .signal-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:13px; text-align:center; }
+  .signal-icon { font-size:20px; margin-bottom:5px; }
+  .signal-name { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:1px; color:var(--text3); margin-bottom:3px; }
+  .signal-value { font-size:12px; font-weight:600; }
+  .signal-value.bull { color:var(--play); }
+  .signal-value.bear { color:var(--pass); }
+  .signal-value.neutral { color:var(--text2); }
+
+  .breakdown-tabs { display:flex; gap:0; margin-bottom:14px; border-bottom:1px solid var(--border); }
+  .breakdown-tab { padding:8px 18px; font-family:'DM Mono',monospace; font-size:11px; letter-spacing:2px; color:var(--text3); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; background:none; border-top:none; border-left:none; border-right:none; outline:none; transition:all 0.2s; }
+  .breakdown-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .breakdown-panel { display:none; }
+  .breakdown-panel.active { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .breakdown-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .breakdown-title { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:2px; color:var(--text3); margin-bottom:12px; }
+  .breakdown-metric { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .breakdown-metric:last-child { border-bottom:none; }
+  .metric-label { color:var(--text2); font-size:12px; }
+  .metric-value { font-family:'DM Mono',monospace; font-size:12px; font-weight:500; }
+  .metric-value.positive { color:var(--play); }
+  .metric-value.negative { color:var(--pass); }
+  .metric-value.neutral { color:var(--text); }
+  .metric-value.warn { color:var(--monitor); }
+
+  .empty-state { text-align:center; padding:56px 20px; color:var(--text3); }
+  .empty-icon { font-size:44px; margin-bottom:14px; opacity:0.35; }
+  .empty-title { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:3px; color:var(--text3); margin-bottom:6px; }
+  .empty-sub { font-size:13px; font-family:'DM Mono',monospace; letter-spacing:1px; }
+
+  .loading-state { text-align:center; padding:48px 20px; display:none; }
+  .loading-title { font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:4px; color:var(--accent); margin-bottom:6px; }
+  .loading-sub { font-family:'DM Mono',monospace; font-size:11px; color:var(--text3); margin-bottom:20px; }
+  .loading-steps { display:flex; flex-direction:column; gap:7px; max-width:340px; margin:0 auto; text-align:left; }
+  .loading-step { display:flex; align-items:center; gap:9px; font-family:'DM Mono',monospace; font-size:12px; color:var(--text3); transition:color 0.3s; }
+  .loading-step.done { color:var(--accent); }
+  .loading-step.active { color:var(--text); }
+  .step-dot { width:6px; height:6px; border-radius:50%; background:var(--text3); flex-shrink:0; transition:background 0.3s; }
+  .loading-step.done .step-dot { background:var(--accent); }
+  .loading-step.active .step-dot { background:var(--accent3); box-shadow:0 0 6px var(--accent3); animation:pulse 1s infinite; }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+  .result-enter { animation:fadeUp 0.4s ease both; }
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  @media(max-width:900px) {
+    .sources-grid { grid-template-columns:repeat(3,1fr); }
+    .meta-row { grid-template-columns:repeat(3,1fr); }
+    .dual-verdict { grid-template-columns:1fr; }
+    .signals-row { grid-template-columns:repeat(3,1fr); }
+    .breakdown-panel.active { grid-template-columns:1fr; }
+  }
+  @media(max-width:600px) {
+    .teams-row { grid-template-columns:1fr; }
+    .vs-badge { padding-top:0; }
+    .signals-row { grid-template-columns:repeat(2,1fr); }
+    .meta-row { grid-template-columns:repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">HALFLINE<span>CBB GAME ANALYZER — FULL GAME + 1ST HALF</span></div>
+    <div class="header-right">
+      <div class="live-badge"><div class="live-dot"></div>LIVE DATA</div>
+      <div class="season-tag">2025–26</div>
+    </div>
+  </header>
+
+  <!-- SERVER CONFIG BAR -->
+  <div class="config-bar">
+    <div class="container">
+      <div class="config-inner">
+        <div class="config-label">SERVER URL</div>
+        <input class="config-input" id="serverUrl" placeholder="https://your-app.railway.app" value="" />
+        <button class="ping-btn" onclick="pingServer()">PING</button>
+        <div class="config-status idle" id="serverStatus">NOT CONNECTED</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME INPUT -->
+  <div class="game-input-section">
+    <div class="section-label">// GAME SETUP</div>
+    <div class="teams-row">
+      <div class="team-input-group">
+        <div class="team-label">AWAY TEAM</div>
+        <input class="team-input" id="awayTeam" placeholder="KANSAS" type="text"/>
+      </div>
+      <div class="vs-badge">VS</div>
+      <div class="team-input-group">
+        <div class="team-label">HOME TEAM</div>
+        <input class="team-input" id="homeTeam" placeholder="DUKE" type="text"/>
+      </div>
+    </div>
+    <div class="meta-row">
+      <div class="meta-input-group">
+        <div class="meta-label">FULL SPREAD</div>
+        <input class="meta-input" id="fullSpread" placeholder="-6.5" type="text"/>
+      </div>
+      <div class="meta-input-group">
+        <div class="meta-label">FULL TOTAL</div>
+        <input class="meta-input" id="fullTotal" placeholder="138.5" type="text"/>
+      </div>
+      <div class="meta-input-group">
+        <div class="meta-label">1H SPREAD</div>
+        <input class="meta-input" id="halfSpread" placeholder="-3.5" type="text"/>
+      </div>
+      <div class="meta-input-group">
+        <div class="meta-label">1H TOTAL</div>
+        <input class="meta-input" id="halfTotal" placeholder="67.5" type="text"/>
+      </div>
+      <div class="meta-input-group">
+        <div class="meta-label">CONFERENCE</div>
+        <select class="meta-select" id="conference">
+          <option value="">— SELECT —</option>
+          <option>Big 12</option><option>ACC</option><option>Big Ten</option>
+          <option>SEC</option><option>Big East</option><option>Pac-12</option>
+          <option>AAC</option><option>MWC</option><option>Non-Conference</option>
+        </select>
+      </div>
+      <div class="meta-input-group">
+        <div class="meta-label">BET TYPE</div>
+        <select class="meta-select" id="betType">
+          <option value="spread">Spread</option>
+          <option value="total">Total (O/U)</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA SOURCES -->
+  <div class="data-sources-section">
+    <div class="section-label">// DATA SOURCES</div>
+    <div class="sources-grid">
+      <div class="source-card active" id="src-hasla"><div class="source-name">HASLAMETRICS</div><div class="source-status ok" id="hasla-status">READY</div></div>
+      <div class="source-card active" id="src-torvik"><div class="source-name">BART TORVIK</div><div class="source-status ok" id="torvik-status">READY</div></div>
+      <div class="source-card active" id="src-teamrank"><div class="source-name">TEAMRANKINGS</div><div class="source-status ok" id="teamrank-status">READY</div></div>
+      <div class="source-card active" id="src-action"><div class="source-name">ACTION NETWORK</div><div class="source-status ok" id="action-status">READY</div></div>
+      <div class="source-card active" id="src-covers"><div class="source-name">COVERS.COM</div><div class="source-status ok" id="covers-status">READY</div></div>
+      <div class="source-card active" id="src-odds"><div class="source-name">ODDS API</div><div class="source-status ok" id="odds-status">READY</div></div>
+    </div>
+  </div>
+
+  <!-- FLAGS + ANALYZE -->
+  <div class="analyze-row">
+    <button class="analyze-btn" id="analyzeBtn" onclick="runAnalysis()">ANALYZE GAME</button>
+    <div class="manual-flags">
+      <label class="flag-toggle" id="flag-injury"><input type="checkbox" onchange="toggleFlag(this,'flag-injury')">🚨 KEY INJURY</label>
+      <label class="flag-toggle" id="flag-b2b"><input type="checkbox" onchange="toggleFlag(this,'flag-b2b')">🔁 BACK-TO-BACK</label>
+      <label class="flag-toggle" id="flag-rivalry"><input type="checkbox" onchange="toggleFlag(this,'flag-rivalry')">🔥 RIVALRY</label>
+      <label class="flag-toggle" id="flag-neutral"><input type="checkbox" onchange="toggleFlag(this,'flag-neutral')">📍 NEUTRAL SITE</label>
+      <label class="flag-toggle" id="flag-slow"><input type="checkbox" onchange="toggleFlag(this,'flag-slow')">❄️ SLOW STARTER</label>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results-section" id="resultsSection">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">⚡</div>
+      <div class="empty-title">AWAITING INPUT</div>
+      <div class="empty-sub">Connect your server, enter matchup details, and run analysis</div>
+    </div>
+
+    <div class="loading-state" id="loadingState">
+      <div class="loading-title">PULLING LIVE DATA</div>
+      <div class="loading-sub">Fetching from all 6 sources...</div>
+      <div class="loading-steps">
+        <div class="loading-step" id="step1"><div class="step-dot"></div>Fetching Haslametrics efficiency ratings</div>
+        <div class="loading-step" id="step2"><div class="step-dot"></div>Loading Bart Torvik 1st half splits</div>
+        <div class="loading-step" id="step3"><div class="step-dot"></div>Pulling TeamRankings ATS records</div>
+        <div class="loading-step" id="step4"><div class="step-dot"></div>Checking Action Network line movement</div>
+        <div class="loading-step" id="step5"><div class="step-dot"></div>Comparing odds across sportsbooks</div>
+        <div class="loading-step" id="step6"><div class="step-dot"></div>Running AI decision engine</div>
+      </div>
+    </div>
+
+    <div id="resultsContent" style="display:none;">
+
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+        <div class="mode-tabs">
+          <button class="mode-tab active" id="tab-both" onclick="setTab('both')">BOTH</button>
+          <button class="mode-tab" id="tab-half" onclick="setTab('half')">1ST HALF</button>
+          <button class="mode-tab" id="tab-full" onclick="setTab('full')">FULL GAME</button>
+        </div>
+        <div id="parlayBadge" style="display:none; font-family:'Bebas Neue',sans-serif; font-size:13px; letter-spacing:2px; padding:8px 16px; border-radius:6px; background:rgba(0,229,160,0.12); border:1px solid rgba(0,229,160,0.3); color:var(--accent);">✅ PARLAY ELIGIBLE</div>
+      </div>
+
+      <div id="alertBanner" class="alert-banner" style="display:none;">
+        <div class="alert-icon" id="alertIcon"></div>
+        <div class="alert-text"><strong id="alertTitle"></strong><span id="alertSub"></span></div>
+      </div>
+
+      <div class="dual-verdict" id="dualVerdict">
+        <div class="verdict-card" id="halfVerdictCard">
+          <div class="verdict-top">
+            <div><div class="verdict-type-label">1ST HALF</div><div class="verdict-badge" id="halfBadge">—</div></div>
+            <div class="verdict-proj"><div class="verdict-proj-label">PROJ 1H TOTAL</div><div class="verdict-proj-val" id="halfProjTotal">—</div></div>
+          </div>
+          <div class="confidence-bar-wrap">
+            <div class="confidence-label"><span>CONFIDENCE</span><span id="halfConfPct">—</span></div>
+            <div class="confidence-bar"><div class="confidence-fill" id="halfConfFill" style="width:0%"></div></div>
+          </div>
+          <div class="verdict-reasoning" id="halfReasoning">—</div>
+        </div>
+        <div class="verdict-card" id="fullVerdictCard">
+          <div class="verdict-top">
+            <div><div class="verdict-type-label">FULL GAME</div><div class="verdict-badge" id="fullBadge">—</div></div>
+            <div class="verdict-proj"><div class="verdict-proj-label">PROJ FULL TOTAL</div><div class="verdict-proj-val" id="fullProjTotal">—</div></div>
+          </div>
+          <div class="confidence-bar-wrap">
+            <div class="confidence-label"><span>CONFIDENCE</span><span id="fullConfPct">—</span></div>
+            <div class="confidence-bar"><div class="confidence-fill" id="fullConfFill" style="width:0%"></div></div>
+          </div>
+          <div class="verdict-reasoning" id="fullReasoning">—</div>
+        </div>
+      </div>
+
+      <div class="signals-row">
+        <div class="signal-card"><div class="signal-icon">📈</div><div class="signal-name">LINE MOVEMENT</div><div class="signal-value" id="sig-line">—</div></div>
+        <div class="signal-card"><div class="signal-icon">🎯</div><div class="signal-name">SHARP MONEY</div><div class="signal-value" id="sig-sharp">—</div></div>
+        <div class="signal-card"><div class="signal-icon">⚡</div><div class="signal-name">PACE EDGE</div><div class="signal-value" id="sig-pace">—</div></div>
+        <div class="signal-card"><div class="signal-icon">🔥</div><div class="signal-name">MOMENTUM</div><div class="signal-value" id="sig-momentum">—</div></div>
+        <div class="signal-card"><div class="signal-icon">📊</div><div class="signal-name">DATA QUALITY</div><div class="signal-value" id="sig-quality">—</div></div>
+      </div>
+
+      <div class="breakdown-tabs">
+        <button class="breakdown-tab active" onclick="setBreakdown('efficiency')">EFFICIENCY</button>
+        <button class="breakdown-tab" onclick="setBreakdown('history')">1H DATA</button>
+        <button class="breakdown-tab" onclick="setBreakdown('market')">MARKET</button>
+        <button class="breakdown-tab" onclick="setBreakdown('signals')">ALL SIGNALS</button>
+      </div>
+
+      <div class="breakdown-panel active" id="panel-efficiency">
+        <div class="breakdown-card">
+          <div class="breakdown-title">TORVIK — OFFENSIVE</div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-away-off">AWAY ADJ OFF</span><span class="metric-value neutral" id="away-adj-off">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-home-off">HOME ADJ OFF</span><span class="metric-value neutral" id="home-adj-off">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">OFF EDGE</span><span class="metric-value positive" id="off-edge">—</span></div>
+        </div>
+        <div class="breakdown-card">
+          <div class="breakdown-title">TORVIK — DEFENSIVE</div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-away-def">AWAY ADJ DEF</span><span class="metric-value neutral" id="away-adj-def">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-home-def">HOME ADJ DEF</span><span class="metric-value neutral" id="home-adj-def">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">DEF EDGE</span><span class="metric-value positive" id="def-edge">—</span></div>
+        </div>
+        <div class="breakdown-card">
+          <div class="breakdown-title">PACE & TEMPO</div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-away-tempo">AWAY TEMPO</span><span class="metric-value neutral" id="away-tempo">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-home-tempo">HOME TEMPO</span><span class="metric-value neutral" id="home-tempo">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">COMBINED</span><span class="metric-value warn" id="combined-tempo">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">PACE VERDICT</span><span class="metric-value neutral" id="pace-verdict">—</span></div>
+        </div>
+      </div>
+
+      <div class="breakdown-panel" id="panel-history">
+        <div class="breakdown-card">
+          <div class="breakdown-title">TEAMRANKINGS — 1H SCORING</div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-away-1h">AWAY 1H PPG</span><span class="metric-value neutral" id="away-1h-ppg">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-home-1h">HOME 1H PPG</span><span class="metric-value neutral" id="home-1h-ppg">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">PROJECTED 1H</span><span class="metric-value warn" id="proj-1h">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">VS POSTED LINE</span><span class="metric-value neutral" id="vs-posted-1h">—</span></div>
+        </div>
+        <div class="breakdown-card">
+          <div class="breakdown-title">HASLAMETRICS — FINGERPRINT</div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-away-hasla">AWAY OFF EFF</span><span class="metric-value neutral" id="away-hasla-off">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-home-hasla">HOME OFF EFF</span><span class="metric-value neutral" id="home-hasla-off">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">AWAY MOMENTUM</span><span class="metric-value neutral" id="away-momentum">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">HOME MOMENTUM</span><span class="metric-value neutral" id="home-momentum">—</span></div>
+        </div>
+        <div class="breakdown-card">
+          <div class="breakdown-title">COVERS — ATS HISTORY</div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-away-ats">AWAY ATS REC</span><span class="metric-value neutral" id="away-ats-rec">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label" id="lbl-home-ats">HOME ATS REC</span><span class="metric-value neutral" id="home-ats-rec">—</span></div>
+        </div>
+      </div>
+
+      <div class="breakdown-panel" id="panel-market">
+        <div class="breakdown-card">
+          <div class="breakdown-title">LINE MOVEMENT</div>
+          <div class="breakdown-metric"><span class="metric-label">OPEN SPREAD</span><span class="metric-value neutral" id="mkt-open">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">CURRENT SPREAD</span><span class="metric-value neutral" id="mkt-current">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">LINE MOVE</span><span class="metric-value neutral" id="mkt-move">—</span></div>
+        </div>
+        <div class="breakdown-card">
+          <div class="breakdown-title">PUBLIC BETTING</div>
+          <div class="breakdown-metric"><span class="metric-label">HOME PUBLIC %</span><span class="metric-value neutral" id="mkt-pub-home">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">AWAY PUBLIC %</span><span class="metric-value neutral" id="mkt-pub-away">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">SHARP SIGNAL</span><span class="metric-value neutral" id="mkt-sharp">—</span></div>
+        </div>
+        <div class="breakdown-card">
+          <div class="breakdown-title">BEST LINES</div>
+          <div class="breakdown-metric"><span class="metric-label">BEST FULL BOOK</span><span class="metric-value positive" id="mkt-full-book">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">BEST 1H BOOK</span><span class="metric-value positive" id="mkt-half-book">—</span></div>
+          <div class="breakdown-metric"><span class="metric-label">LIVE FULL TOTAL</span><span class="metric-value neutral" id="mkt-live-total">—</span></div>
+        </div>
+      </div>
+
+      <div class="breakdown-panel" id="panel-signals">
+        <div class="breakdown-card" style="grid-column:1/-1;">
+          <div class="breakdown-title">ALL MODEL SIGNALS</div>
+          <div id="all-signals-list"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // -------------------------------------------------------
+  // CONFIGURATION
+  // -------------------------------------------------------
+  // Save server URL to localStorage so it persists
+  const savedUrl = localStorage.getItem('halfline_server_url') || '';
+  document.getElementById('serverUrl').value = savedUrl;
+  document.getElementById('serverUrl').addEventListener('change', e => {
+    localStorage.setItem('halfline_server_url', e.target.value.trim());
+  });
+
+  function getServerUrl() {
+    return document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
+  }
+
+  async function pingServer() {
+    const url = getServerUrl();
+    if (!url) { alert('Enter your Railway server URL first'); return; }
+    const status = document.getElementById('serverStatus');
+    status.textContent = 'PINGING...';
+    status.className = 'config-status idle';
+    try {
+      const resp = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
+      if (resp.ok) {
+        const data = await resp.json();
+        status.textContent = 'CONNECTED ✓';
+        status.className = 'config-status ok';
+      } else {
+        status.textContent = 'ERROR ' + resp.status;
+        status.className = 'config-status err';
+      }
+    } catch (e) {
+      status.textContent = 'UNREACHABLE';
+      status.className = 'config-status err';
+    }
+  }
+
+  // -------------------------------------------------------
+  // UI HELPERS
+  // -------------------------------------------------------
+  function toggleFlag(cb, id) {
+    document.getElementById(id).classList.toggle('active', cb.checked);
+  }
+
+  function setTab(tab) {
+    ['both','half','full'].forEach(t => document.getElementById('tab-'+t).classList.toggle('active', t===tab));
+    const hc = document.getElementById('halfVerdictCard');
+    const fc = document.getElementById('fullVerdictCard');
+    if (tab==='both') { hc.style.display=''; fc.style.display=''; }
+    else if (tab==='half') { hc.style.display=''; fc.style.display='none'; }
+    else { hc.style.display='none'; fc.style.display=''; }
+  }
+
+  function setBreakdown(panel) {
+    document.querySelectorAll('.breakdown-tab').forEach((t,i) => {
+      const panels=['efficiency','history','market','signals'];
+      t.classList.toggle('active', panels[i]===panel);
+    });
+    document.querySelectorAll('.breakdown-panel').forEach(p => {
+      p.classList.toggle('active', p.id==='panel-'+panel);
+    });
+  }
+
+  function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+  function setSignal(id, val, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    el.className = 'signal-value ' + cls;
+  }
+
+  function setMetric(id, val, cls='neutral') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val !== null && val !== undefined ? val : 'N/A';
+    el.className = 'metric-value ' + cls;
+  }
+
+  // -------------------------------------------------------
+  // MAIN ANALYSIS FUNCTION
+  // -------------------------------------------------------
+  async function runAnalysis() {
+    const serverUrl = getServerUrl();
+    if (!serverUrl) {
+      alert('Please enter your Railway server URL at the top of the page first.');
+      return;
+    }
+
+    const home = document.getElementById('homeTeam').value.trim();
+    const away = document.getElementById('awayTeam').value.trim();
+    if (!home || !away) { alert('Please enter both team names.'); return; }
+
+    // Update dynamic labels
+    document.getElementById('lbl-away-off').textContent = away.toUpperCase() + ' ADJ OFF';
+    document.getElementById('lbl-home-off').textContent = home.toUpperCase() + ' ADJ OFF';
+    document.getElementById('lbl-away-def').textContent = away.toUpperCase() + ' ADJ DEF';
+    document.getElementById('lbl-home-def').textContent = home.toUpperCase() + ' ADJ DEF';
+    document.getElementById('lbl-away-tempo').textContent = away.toUpperCase() + ' TEMPO';
+    document.getElementById('lbl-home-tempo').textContent = home.toUpperCase() + ' TEMPO';
+    document.getElementById('lbl-away-1h').textContent = away.toUpperCase() + ' 1H PPG';
+    document.getElementById('lbl-home-1h').textContent = home.toUpperCase() + ' 1H PPG';
+    document.getElementById('lbl-away-hasla').textContent = away.toUpperCase() + ' OFF EFF';
+    document.getElementById('lbl-home-hasla').textContent = home.toUpperCase() + ' OFF EFF';
+    document.getElementById('lbl-away-ats').textContent = away.toUpperCase() + ' ATS REC';
+    document.getElementById('lbl-home-ats').textContent = home.toUpperCase() + ' ATS REC';
+
+    // Show loading UI
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultsContent').style.display = 'none';
+    document.getElementById('loadingState').style.display = 'block';
+
+    const btn = document.getElementById('analyzeBtn');
+    btn.classList.add('running');
+    btn.textContent = 'ANALYZING...';
+
+    // Animate sources loading
+    const sources = ['src-hasla','src-torvik','src-teamrank','src-action','src-covers','src-odds'];
+    const statuses = ['hasla-status','torvik-status','teamrank-status','action-status','covers-status','odds-status'];
+    sources.forEach(s => document.getElementById(s).classList.add('loading'));
+    statuses.forEach(s => { document.getElementById(s).textContent='FETCHING'; document.getElementById(s).className='source-status fetching'; });
+
+    // Animate loading steps while fetch runs
+    const steps = ['step1','step2','step3','step4','step5','step6'];
+    steps.forEach(s => { document.getElementById(s).classList.remove('active','done'); });
+
+    const animateSteps = async () => {
+      for (let i=0; i<steps.length; i++) {
+        await sleep(500);
+        if (i>0) document.getElementById(steps[i-1]).classList.replace('active','done');
+        document.getElementById(steps[i]).classList.add('active');
+      }
+    };
+    const stepAnimation = animateSteps();
+
+    // Collect flags
+    const flags = {
+      injury: document.getElementById('flag-injury').querySelector('input').checked,
+      b2b: document.getElementById('flag-b2b').querySelector('input').checked,
+      rivalry: document.getElementById('flag-rivalry').querySelector('input').checked,
+      neutral: document.getElementById('flag-neutral').querySelector('input').checked,
+      slow_starter: document.getElementById('flag-slow').querySelector('input').checked,
+    };
+
+    // Call backend
+    let data = null;
+    let fetchError = null;
+    try {
+      const resp = await fetch(`${serverUrl}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          home, away,
+          full_spread: document.getElementById('fullSpread').value,
+          full_total: document.getElementById('fullTotal').value,
+          half_spread: document.getElementById('halfSpread').value,
+          half_total: document.getElementById('halfTotal').value,
+          conference: document.getElementById('conference').value,
+          bet_type: document.getElementById('betType').value,
+          flags
+        }),
+        signal: AbortSignal.timeout(25000)
+      });
+      if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+      data = await resp.json();
+    } catch (e) {
+      fetchError = e.message;
+    }
+
+    await stepAnimation;
+    await sleep(300);
+
+    // Finish loading animation
+    document.getElementById(steps[steps.length-1]).classList.replace('active','done');
+    sources.forEach((s,i) => {
+      document.getElementById(s).classList.remove('loading');
+      const status = data?.data_sources_status;
+      const keys = ['haslametrics','torvik','teamrankings','action_network','covers','odds_api'];
+      const st = status?.[keys[i]] || (fetchError ? 'error' : 'partial');
+      document.getElementById(statuses[i]).textContent = st === 'ok' ? 'OK' : st === 'partial' ? 'PARTIAL' : 'ERROR';
+      document.getElementById(statuses[i]).className = 'source-status ' + (st === 'ok' ? 'ok' : st === 'partial' ? 'partial' : 'error');
+    });
+
+    document.getElementById('loadingState').style.display = 'none';
+    btn.classList.remove('running');
+    btn.textContent = 'RE-ANALYZE';
+    document.getElementById('serverStatus').textContent = 'CONNECTED ✓';
+    document.getElementById('serverStatus').className = 'config-status ok';
+
+    if (fetchError || !data) {
+      // Show error state
+      document.getElementById('resultsContent').style.display = 'block';
+      const banner = document.getElementById('alertBanner');
+      banner.style.display = 'flex';
+      banner.className = 'alert-banner error';
+      document.getElementById('alertIcon').textContent = '❌';
+      document.getElementById('alertTitle').textContent = 'COULD NOT REACH SERVER';
+      document.getElementById('alertSub').textContent = fetchError + ' — Check your server URL and make sure Railway is running.';
+      document.getElementById('serverStatus').textContent = 'ERROR';
+      document.getElementById('serverStatus').className = 'config-status err';
+      return;
+    }
+
+    displayResults(data, home, away);
+  }
+
+  // -------------------------------------------------------
+  // DISPLAY RESULTS FROM LIVE DATA
+  // -------------------------------------------------------
+  function displayResults(d, home, away) {
+    document.getElementById('resultsContent').style.display = 'block';
+    document.getElementById('resultsContent').classList.add('result-enter');
+
+    // -- VERDICTS --
+    const halfV = d.half_verdict;
+    const fullV = d.full_verdict;
+
+    const hvc = document.getElementById('halfVerdictCard');
+    hvc.className = 'verdict-card ' + halfV.toLowerCase();
+    const hvb = document.getElementById('halfBadge');
+    hvb.className = 'verdict-badge ' + halfV.toLowerCase();
+    hvb.textContent = halfV;
+    document.getElementById('halfProjTotal').textContent = d.projected_half_total || '—';
+    document.getElementById('halfConfPct').textContent = d.half_confidence + '%';
+    document.getElementById('halfReasoning').textContent = d.half_reasoning;
+    const hcf = document.getElementById('halfConfFill');
+    hcf.className = 'confidence-fill ' + halfV.toLowerCase();
+    setTimeout(() => { hcf.style.width = d.half_confidence + '%'; }, 100);
+
+    const fvc = document.getElementById('fullVerdictCard');
+    fvc.className = 'verdict-card ' + fullV.toLowerCase();
+    const fvb = document.getElementById('fullBadge');
+    fvb.className = 'verdict-badge ' + fullV.toLowerCase();
+    fvb.textContent = fullV;
+    document.getElementById('fullProjTotal').textContent = d.projected_full_total || '—';
+    document.getElementById('fullConfPct').textContent = d.full_confidence + '%';
+    document.getElementById('fullReasoning').textContent = d.full_reasoning;
+    const fcf = document.getElementById('fullConfFill');
+    fcf.className = 'confidence-fill ' + fullV.toLowerCase();
+    setTimeout(() => { fcf.style.width = d.full_confidence + '%'; }, 150);
+
+    // -- ALERT BANNER --
+    const banner = document.getElementById('alertBanner');
+    if (d.is_conflict) {
+      banner.style.display='flex'; banner.className='alert-banner conflict';
+      document.getElementById('alertIcon').textContent='⚠️';
+      document.getElementById('alertTitle').textContent='1H AND FULL GAME SIGNALS CONFLICT';
+      document.getElementById('alertSub').textContent=`1st Half says ${halfV} — Full Game says ${fullV}. This pattern often means ${away.toUpperCase()} starts strong but fades. Consider 1H only.`;
+    } else if (d.is_parlay) {
+      banner.style.display='flex'; banner.className='alert-banner parlay';
+      document.getElementById('alertIcon').textContent='✅';
+      document.getElementById('alertTitle').textContent='PARLAY OPPORTUNITY DETECTED';
+      document.getElementById('alertSub').textContent='Both 1H and Full Game are PLAY signals with strong model confidence. These sides may offer value on a parlay.';
+      document.getElementById('parlayBadge').style.display='block';
+    } else if (halfV==='MONITOR'||fullV==='MONITOR') {
+      banner.style.display='flex'; banner.className='alert-banner neutral';
+      document.getElementById('alertIcon').textContent='👁️';
+      document.getElementById('alertTitle').textContent='MONITOR: CHECK BACK BEFORE TIP';
+      document.getElementById('alertSub').textContent='Signals are mixed. Re-run 30–60 min before tip to catch updated line movement.';
+      document.getElementById('parlayBadge').style.display='none';
+    } else {
+      banner.style.display='none';
+      document.getElementById('parlayBadge').style.display='none';
+    }
+
+    // -- SIGNAL CARDS --
+    const lineMove = d.line_move && d.line_move !== 'N/A' ? `MOVE ${d.line_move}` : 'NO MOVE';
+    setSignal('sig-line', lineMove, d.line_move?.startsWith('+') ? 'bull' : d.line_move?.startsWith('-') ? 'bear' : 'neutral');
+    setSignal('sig-sharp', d.sharp_indicator || 'N/A', d.sharp_indicator?.includes('SHARP')||d.sharp_indicator?.includes('REVERSE') ? 'bull' : d.sharp_indicator==='PUBLIC SIDE' ? 'bear' : 'neutral');
+    setSignal('sig-pace', d.combined_tempo > 72 ? 'FAST PACE' : d.combined_tempo < 68 ? 'SLOW PACE' : 'NEUTRAL', 'neutral');
+    setSignal('sig-momentum', d.home_momentum && d.home_momentum!=='N/A' ? 'HOME MOM: '+d.home_momentum : 'N/A', 'neutral');
+
+    const sourceStatuses = Object.values(d.data_sources_status || {});
+    const okCount = sourceStatuses.filter(s=>s==='ok').length;
+    setSignal('sig-quality', `${okCount}/6 SOURCES`, okCount>=4 ? 'bull' : okCount>=2 ? 'neutral' : 'bear');
+
+    // -- EFFICIENCY BREAKDOWN --
+    setMetric('away-adj-off', d.away_adj_off);
+    setMetric('home-adj-off', d.home_adj_off);
+    const offE = d.off_edge;
+    setMetric('off-edge', offE > 0 ? `${home.toUpperCase()} +${offE}` : `${away.toUpperCase()} +${Math.abs(offE)}`, offE > 3 ? 'positive' : offE < -3 ? 'negative' : 'neutral');
+    setMetric('away-adj-def', d.away_adj_def);
+    setMetric('home-adj-def', d.home_adj_def);
+    setMetric('def-edge', 'N/A');
+    setMetric('away-tempo', d.away_tempo ? d.away_tempo + ' pos/g' : 'N/A');
+    setMetric('home-tempo', d.home_tempo ? d.home_tempo + ' pos/g' : 'N/A');
+    setMetric('combined-tempo', d.combined_tempo ? d.combined_tempo + ' avg' : 'N/A', 'warn');
+    setMetric('pace-verdict', d.combined_tempo > 72 ? 'FAST — FAVORS OVER' : 'SLOW — FAVORS UNDER', d.combined_tempo > 72 ? 'positive' : 'warn');
+
+    // -- HISTORY BREAKDOWN --
+    setMetric('away-1h-ppg', d.away_1h_ppg || 'N/A');
+    setMetric('home-1h-ppg', d.home_1h_ppg || 'N/A');
+    setMetric('proj-1h', d.projected_half_total ? d.projected_half_total + ' pts' : 'N/A', 'warn');
+    const halfTotal = parseFloat(document.getElementById('halfTotal').value);
+    const projHalf = parseFloat(d.projected_half_total);
+    if (!isNaN(halfTotal) && !isNaN(projHalf)) {
+      const diff = (projHalf - halfTotal).toFixed(1);
+      setMetric('vs-posted-1h', (diff>0?'+':'')+diff+' vs '+halfTotal, diff>0?'positive':'negative');
+    } else {
+      setMetric('vs-posted-1h', 'N/A');
+    }
+    setMetric('away-hasla-off', d.away_off_eff_hasla || 'N/A');
+    setMetric('home-hasla-off', d.home_off_eff_hasla || 'N/A');
+    setMetric('away-momentum', d.away_momentum || 'N/A');
+    setMetric('home-momentum', d.home_momentum || 'N/A');
+    setMetric('away-ats-rec', d.away_ats_record || 'N/A');
+    setMetric('home-ats-rec', d.home_ats_record || 'N/A');
+
+    // -- MARKET BREAKDOWN --
+    setMetric('mkt-open', d.open_spread || 'N/A');
+    setMetric('mkt-current', d.current_spread || 'N/A');
+    setMetric('mkt-move', d.line_move ? d.line_move + ' pts' : 'N/A', d.line_move?.startsWith('+') ? 'positive' : d.line_move?.startsWith('-') ? 'negative' : 'neutral');
+    setMetric('mkt-pub-home', d.public_pct_home ? d.public_pct_home + '%' : 'N/A');
+    setMetric('mkt-pub-away', d.public_pct_away ? d.public_pct_away + '%' : 'N/A');
+    setMetric('mkt-sharp', d.sharp_indicator || 'N/A');
+    setMetric('mkt-full-book', d.best_full_book || 'N/A', 'positive');
+    setMetric('mkt-half-book', d.best_half_book || 'N/A', 'positive');
+    setMetric('mkt-live-total', d.live_full_total || 'N/A');
+
+    // -- ALL SIGNALS TAB --
+    const signalsList = document.getElementById('all-signals-list');
+    if (d.signals && d.signals.length > 0) {
+      signalsList.innerHTML = d.signals.map(s =>
+        `<div class="breakdown-metric"><span class="metric-label">→</span><span style="color:var(--text);font-size:13px;flex:1;padding-left:8px;">${s}</span></div>`
+      ).join('');
+    } else {
+      signalsList.innerHTML = '<div class="breakdown-metric"><span class="metric-label">→</span><span style="color:var(--text2);font-size:13px;padding-left:8px;">No signals generated — check data source connections</span></div>';
+    }
+  }
+</script>
+</body>
+</html>
