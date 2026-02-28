@@ -639,6 +639,57 @@ def analyze():
     })
 
 
+@app.route("/debug/haslametrics", methods=["GET"])
+def debug_haslametrics():
+    """
+    Scrapes Haslametrics and returns the first 3 data rows with every
+    cell index + value so we can confirm exact column positions.
+    Visit: https://your-railway-url.railway.app/debug/haslametrics
+    """
+    try:
+        url = "https://haslametrics.com/ratings.php"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Referer": "https://haslametrics.com/"
+        }
+        resp = requests.get(url, headers=headers, timeout=20)
+        if resp.status_code != 200:
+            return jsonify({"error": f"HTTP {resp.status_code}", "url": url})
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Grab header rows
+        headers_found = []
+        for row in soup.find_all("tr"):
+            cells = row.find_all(["th", "td"])
+            if len(cells) > 10:
+                headers_found.append([c.get_text(strip=True) for c in cells])
+            if len(headers_found) >= 3:
+                break
+
+        # Grab first 3 data rows (rows with enough td cells to be team rows)
+        data_rows = []
+        for row in soup.find_all("tr"):
+            cells = row.find_all("td")
+            if len(cells) >= 20:
+                indexed = {str(i): cells[i].get_text(strip=True) for i in range(min(70, len(cells)))}
+                data_rows.append(indexed)
+            if len(data_rows) >= 3:
+                break
+
+        return jsonify({
+            "status": "ok",
+            "http_status": resp.status_code,
+            "header_rows": headers_found,
+            "first_3_data_rows": data_rows,
+            "total_rows_found": len(soup.find_all("tr")),
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "timestamp": datetime.now().isoformat(),
